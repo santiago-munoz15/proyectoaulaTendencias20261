@@ -18,7 +18,7 @@ class PostulacionViewSet(viewsets.ModelViewSet):
         return [IsAuthenticated()]
 
     def perform_create(self, serializer):
-        serializer.save(candidato=self.request.user)
+        serializer.save(candidato=self.request.user, estado='pendiente')
 
     def get_queryset(self):
         user = self.request.user

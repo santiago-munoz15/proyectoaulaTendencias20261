@@ -9,7 +9,20 @@ class PostulacionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Postulacion
         fields = '__all__'
-        read_only_fields = ['candidato', 'vacante']
+        read_only_fields = ['candidato']
+
+    def validate(self, attrs):
+        request = self.context.get('request')
+
+        if request and request.method == 'POST':
+            vacante = attrs.get('vacante')
+            if not vacante:
+                raise serializers.ValidationError('Debes enviar una vacante valida.')
+
+            if Postulacion.objects.filter(candidato=request.user, vacante=vacante).exists():
+                raise serializers.ValidationError('Ya te postulaste a esta vacante.')
+
+        return attrs
 
     def update(self, instance, validated_data):
         request = self.context.get('request')

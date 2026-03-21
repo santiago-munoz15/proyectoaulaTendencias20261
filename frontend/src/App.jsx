@@ -1,242 +1,429 @@
-import React, { useState, useEffect } from "react";
-import axios from "axios";
-import { jwtDecode } from "jwt-decode";
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import axios from 'axios';
+import Swal from 'sweetalert2';
 
-const API = "http://127.0.0.1:8000/api";
+const API = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api';
+
+const emptyVacante = {
+  titulo: '',
+  descripcion: '',
+  area: '',
+  fecha_limite: '',
+  estado: 'activa',
+};
+
+const estados = ['activa', 'cerrada', 'pausada'];
+
+function toDateInput(value) {
+  return value ? String(value).slice(0, 10) : '';
+}
 
 export default function App() {
-  const [token, setToken] = useState(localStorage.getItem("token") || "");
-  const [loginForm, setLoginForm] = useState({ username: "", password: "" });
+  const [token, setToken] = useState(localStorage.getItem('token') || '');
+  const [user, setUser] = useState(null);
   const [vacantes, setVacantes] = useState([]);
-  const [role, setRole] = useState(""); //Nuevo
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState('');
+  const [editingId, setEditingId] = useState(null);
 
-  const [form, setForm] = useState({
-    titulo: "",
-    descripcion: "",
-    area: "",
-    fecha_publicacion: new Date().toISOString().split("T")[0],
-    fecha_limite: "",
-    estado: "activa",
-  });
+  const [loginForm, setLoginForm] = useState({ username: '', password: '' });
+  const [vacanteForm, setVacanteForm] = useState(emptyVacante);
 
-  const headers = {
-    Authorization: `Bearer ${token}`,
-  };
+  const [search, setSearch] = useState('');
+  const [estadoFiltro, setEstadoFiltro] = useState('');
+  const [areaFiltro, setAreaFiltro] = useState('');
 
-  // LOGIN
-  const login = async () => {
+  const headers = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
+
+  async function login(e) {
+    e.preventDefault();
+    setFeedback('');
+
     try {
       const res = await axios.post(`${API}/auth/login/`, {
         username: loginForm.username.trim(),
         password: loginForm.password.trim(),
       });
 
-      const access = res.data.access;
-
-      const decoded = jwtDecode(access);
-      console.log("TOKEN:", decoded);
-
-      localStorage.setItem("token", access);
-      localStorage.setItem("user_id", decoded.user_id);
-
-      setToken(access);
-
-      alert("✅ Login exitoso");
-    } catch (err) {
-      console.log(err.response?.data);
-      alert("❌ Credenciales incorrectas");
-    }
-  };
-
-  //OBTENER USUARIO (ROL)
-  const getUser = async () => {
-    try {
-      const res = await axios.get(`${API}/auth/me/`, {
-        headers: { Authorization: `Bearer ${token}` },
+      localStorage.setItem('token', res.data.access);
+      setToken(res.data.access);
+      setLoginForm({ username: '', password: '' });
+      setFeedback('Sesion iniciada correctamente.');
+      Swal.fire({
+        title: 'Bienvenido',
+        text: 'Has iniciado sesion correctamente.',
+        icon: 'success',
+        confirmButtonText: 'Continuar',
       });
-
-      console.log("USER:", res.data);
-      setRole(res.data.role);
-    } catch (err) {
-      console.log("Error obteniendo usuario", err);
+    } catch {
+      setFeedback('Credenciales incorrectas.');
     }
-  };
+  }
 
-  // LOGOUT
-  const logout = () => {
-    setToken("");
-    setRole("");
-    localStorage.removeItem("token");
-  };
+  const logout = useCallback(() => {
+    localStorage.removeItem('token');
+    setToken('');
+    setUser(null);
+    setVacantes([]);
+    setEditingId(null);
+    setVacanteForm(emptyVacante);
+    setFeedback('Sesion cerrada.');
+    Swal.fire({
+      title: 'Sesion cerrada',
+      text: 'Has salido del sistema.',
+      icon: 'info',
+      confirmButtonText: 'Entendido',
+    });
+  }, []);
 
-  //VACANTES
-  const getVacantes = async () => {
+  const loadProfile = useCallback(async () => {
+    const res = await axios.get(`${API}/auth/me/`, { headers });
+    setUser(res.data);
+  }, [headers]);
+
+  const loadVacantes = useCallback(async () => {
+    setLoading(true);
     try {
-      const res = await axios.get(`${API}/vacantes/`, { headers });
+      const params = {};
+      if (search.trim()) params.search = search.trim();
+      if (estadoFiltro) params.estado = estadoFiltro;
+      if (areaFiltro.trim()) params.area = areaFiltro.trim();
+
+      const res = await axios.get(`${API}/vacantes/`, { headers, params });
       setVacantes(res.data.results || res.data);
-    } catch (err) {
-      console.log("Error cargando vacantes", err);
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [headers, search, estadoFiltro, areaFiltro]);
 
-  //CREAR
-  const crearVacante = async () => {
+  function startEdit(vacante) {
+    setEditingId(vacante.id);
+    setVacanteForm({
+      titulo: vacante.titulo,
+      descripcion: vacante.descripcion,
+      area: vacante.area,
+      fecha_limite: toDateInput(vacante.fecha_limite),
+      estado: vacante.estado,
+    });
+    setFeedback(`Editando vacante: ${vacante.titulo}`);
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setVacanteForm(emptyVacante);
+  }
+
+  async function saveVacante(e) {
+    e.preventDefault();
+    setSaving(true);
+    setFeedback('');
+
     try {
-      await axios.post(`${API}/vacantes/`, form, { headers });
-      getVacantes();
+      if (editingId) {
+        await axios.patch(`${API}/vacantes/${editingId}/`, vacanteForm, { headers });
+        setFeedback('Vacante actualizada con exito.');
+      } else {
+        await axios.post(`${API}/vacantes/`, vacanteForm, { headers });
+        setFeedback('Vacante creada con exito.');
+      }
+
+      cancelEdit();
+      await loadVacantes();
     } catch (err) {
-      console.log(err.response?.data);
-      alert("❌ No tienes permisos (solo reclutador)");
+      const message = err.response?.data?.detail || 'No se pudo guardar la vacante.';
+      setFeedback(Array.isArray(message) ? message.join(', ') : message);
+    } finally {
+      setSaving(false);
     }
-  };
+  }
 
-  // ELIMINAR
-  const eliminarVacante = async (id) => {
-    await axios.delete(`${API}/vacantes/${id}/`, { headers });
-    getVacantes();
-  };
+  async function removeVacante(id) {
+    if (!window.confirm('Quieres eliminar esta vacante?')) {
+      return;
+    }
 
-  // POSTULARSE
-  const postularse = async (id) => {
     try {
-      await axios.post(`${API}/postulaciones/`, { vacante: id }, { headers });
-      alert("✅ Postulación enviada");
-    } catch (err) {
-      console.log(err.response?.data);
-      alert("❌ No tienes permisos (solo candidato)");
+      await axios.delete(`${API}/vacantes/${id}/`, { headers });
+      setFeedback('Vacante eliminada.');
+      await loadVacantes();
+    } catch {
+      setFeedback('No tienes permisos para eliminar esta vacante.');
     }
-  };
+  }
+
+  async function postularse(vacanteId) {
+    try {
+      await axios.post(`${API}/postulaciones/`, { vacante: vacanteId }, { headers });
+      setFeedback('Postulacion enviada correctamente.');
+    } catch (err) {
+      const message = err.response?.data?.detail || 'No fue posible postularse.';
+      setFeedback(Array.isArray(message) ? message.join(', ') : message);
+    }
+  }
+
+  useEffect(() => {
+    if (!token) {
+      return;
+    }
+
+    const initialize = async () => {
+      try {
+        await Promise.all([loadProfile(), loadVacantes()]);
+      } catch {
+        logout();
+      }
+    };
+
+    initialize();
+  }, [token, loadProfile, loadVacantes, logout]);
 
   useEffect(() => {
     if (token) {
-      getVacantes();
-      getUser(); //YA FUNCIONA
+      loadVacantes();
     }
-  }, [token]);
+  }, [token, loadVacantes]);
+
+  const areasUnicas = useMemo(() => {
+    return [...new Set(vacantes.map((v) => v.area).filter(Boolean))].sort();
+  }, [vacantes]);
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
-      <h1 className="text-3xl font-bold mb-6">Plataforma de Empleo</h1>
+    <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 py-6 sm:px-8">
+      <header className="rounded-3xl border border-white/60 bg-white/70 p-6 shadow-xl shadow-slate-900/5 backdrop-blur-md sm:p-10">
+        <p className="mb-3 inline-block rounded-full bg-teal-100 px-4 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-teal-700">
+          Gestion de contratacion
+        </p>
+        <h1 className="font-display text-3xl font-extrabold tracking-tight text-slate-900 sm:text-5xl">
+          Panel web para manejar vacantes y postulaciones
+        </h1>
+      </header>
 
-      {/* LOGIN */}
       {!token ? (
-        <div className="border p-4 rounded mb-6">
-          <h2 className="text-xl mb-2">Login</h2>
+        <section className="mt-8 grid gap-6 rounded-3xl border border-orange-100 bg-white/80 p-6 shadow-lg shadow-orange-200/30 sm:p-8 md:grid-cols-2">
+          <div>
+            <h2 className="font-display text-2xl font-bold text-slate-900">Iniciar sesion</h2>
+            <p className="mt-2 text-sm text-slate-600">
+              Accede con tu usuario de Django para operar segun tu rol.
+            </p>
+          </div>
 
-          <input
-            className="border p-2 mr-2"
-            placeholder="Usuario"
-            value={loginForm.username}
-            onChange={(e) =>
-              setLoginForm({ ...loginForm, username: e.target.value })
-            }
-          />
-
-          <input
-            className="border p-2 mr-2"
-            type="password"
-            placeholder="Contraseña"
-            value={loginForm.password}
-            onChange={(e) =>
-              setLoginForm({ ...loginForm, password: e.target.value })
-            }
-          />
-
-          <button onClick={login} className="bg-blue-500 text-white px-4 py-2">
-            Iniciar sesión
-          </button>
-        </div>
+          <form onSubmit={login} className="space-y-4">
+            <input
+              type="text"
+              placeholder="Usuario"
+              value={loginForm.username}
+              onChange={(e) => setLoginForm((prev) => ({ ...prev, username: e.target.value }))}
+              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+            />
+            <input
+              type="password"
+              placeholder="Contrasena"
+              value={loginForm.password}
+              onChange={(e) => setLoginForm((prev) => ({ ...prev, password: e.target.value }))}
+              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-200"
+            />
+            <button
+              type="submit"
+              className="w-full rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:translate-y-[-1px] hover:bg-slate-800"
+            >
+              Entrar
+            </button>
+          </form>
+        </section>
       ) : (
-        <button
-          onClick={logout}
-          className="bg-red-500 text-white px-4 py-2 mb-4"
-        >
-          Cerrar sesión
-        </button>
+        <main className="mt-8 grid gap-6 lg:grid-cols-[340px_1fr]">
+          <aside className="space-y-6 rounded-3xl border border-slate-200/70 bg-white/80 p-6 shadow-xl shadow-slate-900/5 backdrop-blur-sm">
+            <div className="rounded-2xl bg-gradient-to-r from-teal-500 to-orange-400 p-4 text-white">
+              <p className="text-xs uppercase tracking-[0.16em] text-white/80">Sesion activa</p>
+              <p className="mt-1 text-lg font-bold">{user?.username}</p>
+              <p className="text-sm capitalize">Rol: {user?.role}</p>
+            </div>
+
+            {user?.role === 'reclutador' && (
+              <form onSubmit={saveVacante} className="space-y-3">
+                <h3 className="font-display text-xl font-bold text-slate-900">
+                  {editingId ? 'Editar vacante' : 'Nueva vacante'}
+                </h3>
+
+                <input
+                  required
+                  type="text"
+                  placeholder="Titulo"
+                  value={vacanteForm.titulo}
+                  onChange={(e) => setVacanteForm((prev) => ({ ...prev, titulo: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-teal-500"
+                />
+
+                <textarea
+                  required
+                  placeholder="Descripcion"
+                  rows={4}
+                  value={vacanteForm.descripcion}
+                  onChange={(e) => setVacanteForm((prev) => ({ ...prev, descripcion: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-teal-500"
+                />
+
+                <input
+                  required
+                  type="text"
+                  placeholder="Area"
+                  value={vacanteForm.area}
+                  onChange={(e) => setVacanteForm((prev) => ({ ...prev, area: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-teal-500"
+                />
+
+                <input
+                  required
+                  type="date"
+                  value={vacanteForm.fecha_limite}
+                  onChange={(e) => setVacanteForm((prev) => ({ ...prev, fecha_limite: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-teal-500"
+                />
+
+                <select
+                  value={vacanteForm.estado}
+                  onChange={(e) => setVacanteForm((prev) => ({ ...prev, estado: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-teal-500"
+                >
+                  {estados.map((estado) => (
+                    <option key={estado} value={estado}>
+                      {estado}
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="w-full rounded-xl bg-teal-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {saving ? 'Guardando...' : editingId ? 'Actualizar' : 'Crear vacante'}
+                </button>
+
+                {editingId && (
+                  <button
+                    type="button"
+                    onClick={cancelEdit}
+                    className="w-full rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    Cancelar edicion
+                  </button>
+                )}
+              </form>
+            )}
+
+            <button
+              onClick={logout}
+              className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+            >
+              Cerrar sesion
+            </button>
+          </aside>
+
+          <section className="rounded-3xl border border-slate-200/70 bg-white/80 p-6 shadow-xl shadow-slate-900/5 backdrop-blur-sm sm:p-8">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar por titulo o descripcion"
+                className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-teal-500"
+              />
+              <select
+                value={estadoFiltro}
+                onChange={(e) => setEstadoFiltro(e.target.value)}
+                className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-teal-500"
+              >
+                <option value="">Todos los estados</option>
+                {estados.map((estado) => (
+                  <option key={estado} value={estado}>
+                    {estado}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={areaFiltro}
+                onChange={(e) => setAreaFiltro(e.target.value)}
+                className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-teal-500"
+              >
+                <option value="">Todas las areas</option>
+                {areasUnicas.map((area) => (
+                  <option key={area} value={area}>
+                    {area}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="mt-6 space-y-3">
+              {loading ? (
+                <p className="text-sm text-slate-500">Cargando vacantes...</p>
+              ) : vacantes.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500">
+                  No hay vacantes para mostrar con esos filtros.
+                </p>
+              ) : (
+                vacantes.map((vacante) => (
+                  <article
+                    key={vacante.id}
+                    className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h3 className="font-display text-xl font-bold text-slate-900">{vacante.titulo}</h3>
+                        <p className="mt-1 text-sm text-slate-600">{vacante.descripcion}</p>
+                      </div>
+                      <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-orange-700">
+                        {vacante.estado}
+                      </span>
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap gap-2 text-xs text-slate-600">
+                      <span className="rounded-full bg-slate-100 px-2.5 py-1">Area: {vacante.area}</span>
+                      <span className="rounded-full bg-slate-100 px-2.5 py-1">Limite: {toDateInput(vacante.fecha_limite)}</span>
+                      <span className="rounded-full bg-slate-100 px-2.5 py-1">Reclutador: {vacante.creado_por}</span>
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {user?.role === 'reclutador' && (
+                        <>
+                          <button
+                            onClick={() => startEdit(vacante)}
+                            className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-700"
+                          >
+                            Editar
+                          </button>
+                          <button
+                            onClick={() => removeVacante(vacante.id)}
+                            className="rounded-lg bg-rose-600 px-3 py-2 text-xs font-semibold text-white hover:bg-rose-700"
+                          >
+                            Eliminar
+                          </button>
+                        </>
+                      )}
+
+                      {user?.role === 'candidato' && (
+                        <button
+                          onClick={() => postularse(vacante.id)}
+                          className="rounded-lg bg-teal-600 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-700"
+                        >
+                          Postularme
+                        </button>
+                      )}
+                    </div>
+                  </article>
+                ))
+              )}
+            </div>
+          </section>
+        </main>
       )}
 
-      {/* APP */}
-      {token && (
-        <>
-          {/* SOLO RECLUTADOR */}
-          {role === "reclutador" && (
-            <div className="mb-6 border p-4 rounded">
-              <h2 className="text-xl mb-2">Crear Vacante</h2>
-
-              <input
-                className="border p-2 mr-2"
-                placeholder="Título"
-                onChange={(e) =>
-                  setForm({ ...form, titulo: e.target.value })
-                }
-              />
-
-              <input
-                className="border p-2 mr-2"
-                placeholder="Descripción"
-                onChange={(e) =>
-                  setForm({ ...form, descripcion: e.target.value })
-                }
-              />
-
-              <input
-                className="border p-2 mr-2"
-                placeholder="Área"
-                onChange={(e) =>
-                  setForm({ ...form, area: e.target.value })
-                }
-              />
-
-              <input
-                className="border p-2 mr-2"
-                type="date"
-                onChange={(e) =>
-                  setForm({ ...form, fecha_limite: e.target.value })
-                }
-              />
-
-              <button
-                onClick={crearVacante}
-                className="bg-green-500 text-white px-4 py-2"
-              >
-                Crear
-              </button>
-            </div>
-          )}
-
-          {/* VACANTES */}
-          <div>
-            <h2 className="text-xl mb-2">Vacantes</h2>
-
-            {vacantes.map((v) => (
-              <div key={v.id} className="border p-4 mb-2 rounded">
-                <h3 className="font-bold">{v.titulo}</h3>
-                <p>{v.descripcion}</p>
-                <p className="text-sm text-gray-600">{v.area}</p>
-
-                {/* SOLO RECLUTADOR */}
-                {role === "reclutador" && (
-                  <button
-                    onClick={() => eliminarVacante(v.id)}
-                    className="bg-red-500 text-white px-2 mr-2 mt-2"
-                  >
-                    Eliminar
-                  </button>
-                )}
-
-                {/* SOLO CANDIDATO */}
-                {role === "candidato" && (
-                  <button
-                    onClick={() => postularse(v.id)}
-                    className="bg-purple-500 text-white px-2 mt-2"
-                  >
-                    Postularme
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        </>
+      {feedback && (
+        <div className="fixed bottom-5 right-5 max-w-sm rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-lg">
+          {feedback}
+        </div>
       )}
     </div>
   );
