@@ -14,7 +14,7 @@ class PostulacionSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         request = self.context.get('request')
 
-        # 🔥 Solo reclutador puede cambiar estado
+        #Solo reclutador puede cambiar estado
         if request.user.role != 'reclutador':
             raise serializers.ValidationError(
                 "No tienes permiso para modificar esta postulación"

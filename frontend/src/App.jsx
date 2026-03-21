@@ -8,7 +8,7 @@ export default function App() {
   const [token, setToken] = useState(localStorage.getItem("token") || "");
   const [loginForm, setLoginForm] = useState({ username: "", password: "" });
   const [vacantes, setVacantes] = useState([]);
-  const [role, setRole] = useState(""); // 🔥 NUEVO
+  const [role, setRole] = useState(""); //Nuevo
 
   const [form, setForm] = useState({
     titulo: "",
@@ -23,7 +23,7 @@ export default function App() {
     Authorization: `Bearer ${token}`,
   };
 
-  // 🔐 LOGIN
+  // LOGIN
   const login = async () => {
     try {
       const res = await axios.post(`${API}/auth/login/`, {
@@ -48,7 +48,7 @@ export default function App() {
     }
   };
 
-  // 🔥 OBTENER USUARIO (ROL)
+  //OBTENER USUARIO (ROL)
   const getUser = async () => {
     try {
       const res = await axios.get(`${API}/auth/me/`, {
@@ -62,14 +62,14 @@ export default function App() {
     }
   };
 
-  // 🚪 LOGOUT
+  // LOGOUT
   const logout = () => {
     setToken("");
     setRole("");
     localStorage.removeItem("token");
   };
 
-  // 📥 VACANTES
+  //VACANTES
   const getVacantes = async () => {
     try {
       const res = await axios.get(`${API}/vacantes/`, { headers });
@@ -79,7 +79,7 @@ export default function App() {
     }
   };
 
-  // ➕ CREAR
+  //CREAR
   const crearVacante = async () => {
     try {
       await axios.post(`${API}/vacantes/`, form, { headers });
@@ -90,13 +90,13 @@ export default function App() {
     }
   };
 
-  // ❌ ELIMINAR
+  // ELIMINAR
   const eliminarVacante = async (id) => {
     await axios.delete(`${API}/vacantes/${id}/`, { headers });
     getVacantes();
   };
 
-  // 📤 POSTULARSE
+  // POSTULARSE
   const postularse = async (id) => {
     try {
       await axios.post(`${API}/postulaciones/`, { vacante: id }, { headers });
@@ -110,7 +110,7 @@ export default function App() {
   useEffect(() => {
     if (token) {
       getVacantes();
-      getUser(); // 🔥 YA FUNCIONA
+      getUser(); //YA FUNCIONA
     }
   }, [token]);
 

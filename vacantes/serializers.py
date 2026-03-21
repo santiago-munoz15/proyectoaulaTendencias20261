@@ -4,7 +4,7 @@ from .models import Vacante
 
 class VacanteSerializer(serializers.ModelSerializer):
 
-    # 🔥 No se envía en POST, se muestra en respuesta
+    # No se envía en POST, se muestra en respuesta
     creado_por = serializers.ReadOnlyField(source='creado_por.username')
 
     class Meta:

@@ -23,13 +23,13 @@ class PostulacionViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
 
-        # 🔥 Reclutador: ve postulaciones de sus vacantes
+        # Reclutador ve postulaciones de sus vacantes
         if user.role == 'reclutador':
             return Postulacion.objects.filter(
                 vacante__creado_por=user
             )
 
-        # 🔥 Candidato: ve sus postulaciones
+        #Candidato  ve sus postulaciones
         return Postulacion.objects.filter(
             candidato=user
         )

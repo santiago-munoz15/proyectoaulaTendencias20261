@@ -35,7 +35,7 @@ class Postulacion(models.Model):
     )
 
     class Meta:
-        unique_together = ('candidato', 'vacante')  # 🔥 evita duplicados
+        unique_together = ('candidato', 'vacante')  # evita duplicados
 
     def __str__(self):
         return f"{self.candidato} - {self.vacante}"

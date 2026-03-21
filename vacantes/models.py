@@ -14,7 +14,7 @@ class Vacante(models.Model):
     descripcion = models.TextField()
     area = models.CharField(max_length=100)
 
-    # 🔥 Se crea automáticamente
+    # Se crea automáticamente
     fecha_publicacion = models.DateTimeField(auto_now_add=True)
 
     fecha_limite = models.DateField()
@@ -25,7 +25,7 @@ class Vacante(models.Model):
         default='activa'
     )
 
-    # 🔥 Relación con el usuario (RECLUTADOR)
+    # Relación con el usuario (RECLUTADOR)
     creado_por = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
