@@ -67,15 +67,49 @@ Campos: `nombre`, `correo`, `telefono`, `perfil_profesional`, `hoja_vida` (URL o
 - `POST /api/postulaciones/` crear (solo candidato)
 - `GET /api/postulaciones/{id}/` detalle
 - `PATCH /api/postulaciones/{id}/` actualizar estado (solo reclutador)
+- `DELETE /api/postulaciones/{id}/` eliminar (solo reclutador)
+
+Flujo de estados:
+
+- `en_revision` -> `entrevistado` -> `aprobado` / `rechazado`
+- No se permiten transiciones inválidas.
 
 Notas:
 
-- Al crear, `estado` inicia en `pendiente`.
+- Al crear, `estado` inicia en `en_revision`.
 - No se permiten postulaciones duplicadas para la misma pareja candidato-vacante.
+
+## Endpoints de entrevistas
+
+- `GET /api/entrevistas/` listar
+- `POST /api/entrevistas/` registrar entrevista (solo reclutador)
+- `GET /api/entrevistas/{id}/` detalle
+
+Campos: `postulacion`, `fecha`, `modalidad` (`virtual`, `presencial`, `telefonica`), `entrevistador`, `observaciones`.
+
+La API incluye las entrevistas asociadas dentro del detalle de cada postulación.
 
 ## Flujo rapido de prueba
 
 1. Registrar reclutador y candidato.
 2. Login de reclutador y crear vacante.
 3. Login de candidato y crear postulacion enviando `vacante`.
-4. Login de reclutador y actualizar `estado` de la postulacion a `aceptada` o `rechazada`.
+4. Login de reclutador y registrar entrevista para esa postulacion.
+5. Login de reclutador y actualizar `estado` de la postulacion siguiendo el flujo permitido.
+
+## Evidencia de integracion backend + frontend
+
+El frontend en `frontend/src/App.jsx` consume la API DRF en estos flujos clave:
+
+- Login con JWT: `POST /api/auth/login/`
+- Carga de vacantes: `GET /api/vacantes/`
+- Postulacion de candidato: `POST /api/postulaciones/`
+- Cambio de estado por reclutador: `PATCH /api/postulaciones/{id}/`
+- Registro de entrevista: `POST /api/entrevistas/`
+- Consulta de entrevistas embebidas en postulacion: `GET /api/postulaciones/`
+
+Validacion automatizada del backend:
+
+- `accounts/tests.py`: autenticacion (`login` y `me`).
+- `vacantes/tests.py`: permisos por rol para gestionar vacantes.
+- `postulaciones/tests.py`: control de flujo de estados, restricciones por rol y registro de entrevistas.
