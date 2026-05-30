@@ -1,32 +1,72 @@
-# Python
+# =========================
+# PYTHON
+# =========================
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
+
+# Virtual environments
 env/
 venv/
-.venv
+.venv/
+
+# Distribution / packaging
 *.egg-info/
 dist/
 build/
 
-# Django
+# Python cache
+*.pyc
+*.pyo
+*.pyd
+
+# =========================
+# DJANGO
+# =========================
 *.sqlite3
 *.log
 .env
+staticfiles/
+media/
 
-# Node.js
+# =========================
+# NODE / REACT
+# =========================
 node_modules/
-npm-debug.log
-yarn-error.log
+frontend/node_modules/
 
-# IDE
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Vite
+frontend/dist/
+dist/
+
+# =========================
+# VS CODE / IDE
+# =========================
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# OS
+# =========================
+# OPERATING SYSTEM
+# =========================
 .DS_Store
 Thumbs.db
+
+# =========================
+# GIT / CACHE
+# =========================
+.cache/
+.pytest_cache/
+.mypy_cache/
+
+# =========================
+# RENDER
+# =========================
+render.yaml.local

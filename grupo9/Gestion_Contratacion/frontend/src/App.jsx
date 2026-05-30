@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import Swal from 'sweetalert2';
 
-const API = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api';
+const API =
+  import.meta.env.VITE_API_URL ||
+  'https://gestion-backend-zk0m.onrender.com/api';
 
 const emptyVacante = {
   titulo: '',
