@@ -5,6 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from .permissions import IsReclutador
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters
+from django.utils import timezone
 
 class VacanteViewSet(viewsets.ModelViewSet):
     queryset = Vacante.objects.all()
@@ -24,3 +25,9 @@ class VacanteViewSet(viewsets.ModelViewSet):
     # GUARDAR USUARIO
     def perform_create(self, serializer):
         serializer.save(creado_por=self.request.user)
+
+    def get_queryset(self):
+        hoy = timezone.localdate()
+        Vacante.objects.filter(estado='activa', fecha_limite__lt=hoy).update(estado='cerrada')
+        Vacante.objects.filter(estado='activa', contratos__isnull=False).update(estado='cerrada')
+        return Vacante.objects.all()

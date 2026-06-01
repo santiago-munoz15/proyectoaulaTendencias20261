@@ -1,18 +1,25 @@
-# React + Vite
+# Frontend de contratación
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Aplicación React + Vite para consumir la API de contratación.
 
-Currently, two official plugins are available:
+## Desarrollo local
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+```bash
+npm install
+npm run dev
+```
 
-## React Compiler
+Configura la URL de la API en un archivo `.env` dentro de `frontend/`:
 
-The React Compiler is enabled on this template. See [this documentation](https://react.dev/learn/react-compiler) for more information.
+```bash
+VITE_API_URL=http://127.0.0.1:8000/api
+```
 
-Note: This will impact Vite dev & build performances.
+## Despliegue en Vercel
 
-## Expanding the ESLint configuration
+1. Importa la carpeta `frontend` como proyecto en Vercel.
+2. Define la variable de entorno `VITE_API_URL` con la URL pública del backend.
+3. Usa el comando de build `npm run build`.
+4. El directorio de salida es `dist`.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Si el backend está en Render o Neon, solo necesitas actualizar la variable `VITE_API_URL` cuando cambie la URL pública.

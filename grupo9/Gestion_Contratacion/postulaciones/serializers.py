@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from .models import Entrevista, Postulacion
+from .models import Contrato
 
 
 class EntrevistaSerializer(serializers.ModelSerializer):
@@ -71,6 +72,10 @@ class PostulacionSerializer(serializers.ModelSerializer):
     vacante_titulo = serializers.ReadOnlyField(source='vacante.titulo')
     vacante_area = serializers.ReadOnlyField(source='vacante.area')
     entrevistas = EntrevistaSerializer(many=True, read_only=True)
+    contrato = serializers.SerializerMethodField(read_only=True)
+    contrato_fecha_inicio = serializers.DateField(write_only=True, required=False, allow_null=True)
+    contrato_tipo_contrato = serializers.ChoiceField(write_only=True, required=False, choices=Contrato.TIPOS)
+    contrato_salario = serializers.DecimalField(write_only=True, required=False, allow_null=True, max_digits=12, decimal_places=2)
 
     class Meta:
         model = Postulacion
@@ -83,8 +88,12 @@ class PostulacionSerializer(serializers.ModelSerializer):
             'fecha_postulacion',
             'estado',
             'entrevistas',
+            'contrato',
+            'contrato_fecha_inicio',
+            'contrato_tipo_contrato',
+            'contrato_salario',
         ]
-        read_only_fields = ['candidato', 'fecha_postulacion', 'entrevistas', 'vacante_titulo', 'vacante_area']
+        read_only_fields = ['candidato', 'fecha_postulacion', 'entrevistas', 'vacante_titulo', 'vacante_area', 'contrato']
 
     def validate(self, attrs):
         request = self.context.get('request')
@@ -94,7 +103,18 @@ class PostulacionSerializer(serializers.ModelSerializer):
             if not vacante:
                 raise serializers.ValidationError('Debes enviar una vacante válida.')
 
+            vacante.cerrar_automaticamente_si_corresponde()
+
             if vacante.estado != 'activa':
+                if vacante.esta_vencida:
+                    raise serializers.ValidationError('No puedes postularte a una vacante vencida.')
+
+                if vacante.esta_cubierta:
+                    raise serializers.ValidationError('No puedes postularte a una vacante ya cubierta.')
+
+                if vacante.estado == 'cerrada':
+                    raise serializers.ValidationError('No puedes postularte a una vacante cerrada.')
+
                 raise serializers.ValidationError('Solo puedes postularte a vacantes activas.')
 
             if Postulacion.objects.filter(candidato=request.user, vacante=vacante).exists():
@@ -113,6 +133,17 @@ class PostulacionSerializer(serializers.ModelSerializer):
                     'Transición de estado inválida. Sigue el flujo: en revisión -> entrevistado -> aprobado/rechazado.'
                 )
 
+            if nuevo_estado == 'aprobado':
+                missing_fields = []
+                if 'contrato_fecha_inicio' not in attrs:
+                    missing_fields.append('contrato_fecha_inicio')
+                if 'contrato_tipo_contrato' not in attrs:
+                    missing_fields.append('contrato_tipo_contrato')
+                if 'contrato_salario' not in attrs:
+                    missing_fields.append('contrato_salario')
+                if missing_fields:
+                    raise serializers.ValidationError({field: 'Este campo es obligatorio al aprobar la postulación.' for field in missing_fields})
+
         return attrs
 
     def update(self, instance, validated_data):
@@ -120,4 +151,68 @@ class PostulacionSerializer(serializers.ModelSerializer):
         if estado:
             instance.estado = estado
             instance.save(update_fields=['estado'])
+
+            if estado == 'aprobado':
+                contrato_defaults = {
+                    'vacante': instance.vacante,
+                    'cargo': instance.vacante.titulo,
+                    'area': instance.vacante.area,
+                    'candidato_nombre': instance.candidato.username,
+                    'estado_postulacion': instance.estado,
+                    'fecha_inicio': validated_data.get('contrato_fecha_inicio'),
+                    'tipo_contrato': validated_data.get('contrato_tipo_contrato'),
+                    'salario': validated_data.get('contrato_salario'),
+                }
+                Contrato.objects.update_or_create(postulacion=instance, defaults=contrato_defaults)
         return instance
+
+    def get_contrato(self, obj):
+        contrato = getattr(obj, 'contrato', None)
+        if not contrato:
+            return None
+        return {
+            'id': contrato.id,
+            'vacante': contrato.vacante.titulo if contrato.vacante else None,
+            'cargo': contrato.cargo,
+            'area': contrato.area,
+            'candidato_nombre': contrato.candidato_nombre,
+            'estado_postulacion': contrato.estado_postulacion,
+            'fecha_inicio': contrato.fecha_inicio,
+            'tipo_contrato': contrato.tipo_contrato,
+            'salario': contrato.salario,
+            'creado_en': contrato.creado_en,
+        }
+
+
+class ContratoSerializer(serializers.ModelSerializer):
+    postulacion_detalle = serializers.SerializerMethodField(read_only=True)
+    vacante_titulo = serializers.ReadOnlyField(source='vacante.titulo')
+    candidato = serializers.ReadOnlyField(source='postulacion.candidato.username')
+
+    class Meta:
+        model = Contrato
+        fields = [
+            'id',
+            'postulacion',
+            'postulacion_detalle',
+            'vacante',
+            'vacante_titulo',
+            'candidato',
+            'cargo',
+            'area',
+            'candidato_nombre',
+            'estado_postulacion',
+            'fecha_inicio',
+            'tipo_contrato',
+            'salario',
+            'creado_en',
+        ]
+        read_only_fields = ['postulacion_detalle', 'vacante_titulo', 'candidato', 'cargo', 'area', 'candidato_nombre', 'estado_postulacion', 'creado_en']
+
+    def get_postulacion_detalle(self, obj):
+        return {
+            'id': obj.postulacion_id,
+            'estado': obj.postulacion.estado,
+            'vacante': obj.postulacion.vacante.titulo,
+            'candidato': obj.postulacion.candidato.username,
+        }

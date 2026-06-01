@@ -1,5 +1,6 @@
 from django.db import models
 from django.conf import settings
+from django.utils import timezone
 
 
 class Vacante(models.Model):
@@ -34,3 +35,17 @@ class Vacante(models.Model):
 
     def __str__(self):
         return f"{self.titulo} - {self.estado}"
+
+    @property
+    def esta_vencida(self):
+        return self.fecha_limite < timezone.localdate()
+
+    @property
+    def esta_cubierta(self):
+        return self.contratos.exists()
+
+    def cerrar_automaticamente_si_corresponde(self):
+        if self.estado == 'activa' and (self.esta_vencida or self.esta_cubierta):
+            self.estado = 'cerrada'
+            self.save(update_fields=['estado'])
+        return self.estado

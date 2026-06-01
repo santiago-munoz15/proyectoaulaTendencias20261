@@ -35,6 +35,12 @@ La API usa JWT con `Authorization: Bearer <token>`.
 - `POST /api/auth/refresh/` renovar token
 - `GET /api/auth/me/` usuario autenticado
 
+### Registro de usuarios
+
+- Un candidato puede registrarse directamente enviando `username`, `email`, `password` y el rol `candidato`.
+- Un reclutador solo puede registrarse si envía el código de invitacion `RECLUTADOR01` junto con el rol `reclutador`.
+- Si el código no coincide, el backend rechaza el registro del reclutador.
+
 ## Endpoints de vacantes
 
 - `GET /api/vacantes/` listar
@@ -113,3 +119,62 @@ Validacion automatizada del backend:
 - `accounts/tests.py`: autenticacion (`login` y `me`).
 - `vacantes/tests.py`: permisos por rol para gestionar vacantes.
 - `postulaciones/tests.py`: control de flujo de estados, restricciones por rol y registro de entrevistas.
+
+## Despliegue final
+
+Arquitectura recomendada con servicios gratuitos:
+
+- Frontend: Vercel
+- Backend Django: Render
+- Base de datos PostgreSQL: Neon o Render PostgreSQL
+
+### Frontend en Vercel
+
+1. Sube el repositorio a GitHub.
+2. En Vercel, importa el proyecto y selecciona la carpeta `frontend` como root.
+3. Configura la variable de entorno:
+
+```bash
+VITE_API_URL=https://<tu-backend>/api
+```
+
+4. Usa el build command `npm run build`.
+
+### Backend en Render
+
+1. Crea un Web Service apuntando al repositorio raíz.
+2. Usa el comando de build:
+
+```bash
+./build.sh
+```
+
+3. Usa el start command:
+
+```bash
+gunicorn gestion_contratacion.wsgi
+```
+
+4. Define variables de entorno:
+
+```bash
+DATABASE_URL=<url-postgres>
+SECRET_KEY=<clave-segura>
+DEBUG=False
+```
+
+### Base de datos
+
+Si el grupo prefiere un servicio gratuito separado para la base de datos, Neon funciona bien con `DATABASE_URL`. Si no se define, el proyecto cae a SQLite en local para desarrollo.
+
+### Flujo final desplegado
+
+1. Ingresa al frontend desplegado en Vercel y accede con tu usuario y contraseña.
+2. Si eres reclutador, entra al módulo de vacantes y crea una nueva vacante con título, descripción, área y fecha límite.
+3. El candidato inicia sesión con su propia cuenta, revisa las vacantes activas y selecciona la opción para postularse.
+4. El reclutador entra al módulo de postulaciones, revisa la solicitud del candidato y cambia su estado siguiendo el flujo permitido: en revisión, entrevistado, aprobado o rechazado.
+5. Si la postulación pasa a entrevistado, el reclutador puede registrar una entrevista con fecha, modalidad y observaciones.
+6. Cuando la postulación se aprueba, el sistema genera el contrato automáticamente y muestra los datos del cargo asociados a esa selección.
+7. El reclutador completa en la interfaz los datos faltantes del contrato, como fecha de inicio, tipo de contrato y salario.
+8. Desde el módulo de reportes, el reclutador puede consultar el embudo de selección con datos reales de las postulaciones almacenadas.
+9. Si la vacante se cubre o vence, el sistema la cierra automáticamente y ya no permite nuevas postulaciones.
